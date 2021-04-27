@@ -1,56 +1,31 @@
 import json
-import requests
-
-
-sentences = [
-    'The food we had yesterday was delicious',
-    'My time in Italy was very enjoyable',
-    'I found the meal to be tasty',
-    'The internet was slow.',
-    'Our experience was suboptimal'
-]
+from textblob import TextBlob
 
 
 def lambda_handler(event, context):
+    tweet_body = event.get('tweetBody')
 
+    if not tweet_body:
+        return {
+            'statusCode': 400,
+            'body': 'Invalid tweet input submitted for sentiment analysis'
+        }
 
-    url = "http://localhost:8000/dep"
-    message_text = "They ate the pizza with anchovies"
-    headers = {'content-type': 'application/json'}
-    d = {'text': message_text, 'model': 'en'}
+    testimonial = TextBlob(tweet_body)
+    sentiment_polarity = testimonial.sentiment.polarity
+    sentiment_subjectivity = testimonial.sentiment.subjectivity
 
-    response = requests.post(url, data=json.dumps(d), headers=headers)
-    r = response.json()
-
-    for sentence in sentences:
-        doc = nlp(sentence)
-        for token in doc:
-            print(token.text, token.dep_, token.head.text, token.head.pos_,
-                  token.pos_, [child for child in token.children])
-
-    aspects = []
-    for sentence in sentences:
-        doc = nlp(sentence)
-        descriptive_term = ''
-        target = ''
-        for token in doc:
-            if token.dep_ == 'nsubj' and token.pos_ == 'NOUN':
-                target = token.text
-            if token.pos_ == 'ADJ':
-                prepend = ''
-                for child in token.children:
-                    if child.pos_ != 'ADV':
-                        continue
-                    prepend += child.text + ' '
-                descriptive_term = prepend + token.text
-        aspects.append({'aspect': target,
-                        'description': descriptive_term})
-    print(aspects)
-
+    response = {'sentiment_polarity': sentiment_polarity,
+                'sentiment_subjectivity': sentiment_subjectivity,
+                'stripped_input': testimonial.stripped}
     return {
         'statusCode': 200,
-        'body': 'mama 5alast'
+        'body': json.dumps(response)
     }
 
-if __name__ == '__main__':
-    lambda_handler({},"")
+
+# if __name__ == '__main__':
+#     event = {'tweetBody': 'Tamimi is the best developer in the world'}
+#     resp = lambda_handler(event,"")
+#
+#     print(resp)
