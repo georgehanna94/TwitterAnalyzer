@@ -1,7 +1,9 @@
-## Goal: Simple Subscriber and event handling
+## Uses solace Native Python API
 import os
 import platform
 import time
+import json
+from textblob import TextBlob
 
 # Import Solace Python  API modules from the solace package
 from solace.messaging.messaging_service import MessagingService, ReconnectionListener, ReconnectionAttemptListener, ServiceInterruptionListener, RetryStrategy, ServiceEvent
@@ -10,16 +12,38 @@ from solace.messaging.receiver.message_receiver import MessageHandler, InboundMe
 
 if platform.uname().system == 'Windows': os.environ["PYTHONUNBUFFERED"] = "1" # Disable stdout buffer 
 
-TOPIC_PREFIX = "samples/hello"
+TOPIC_PREFIX = "sentiment/v1"
 
 # Handle received messages
 class MessageHandlerImpl(MessageHandler):
+    def sentiment_analyzer(self, event, context):
+        tweet_body = event.get('tweetBody')
+
+        if not tweet_body:
+            return {
+                'statusCode': 400,
+                'body': 'Invalid tweet input submitted for sentiment analysis'
+            }
+
+        testimonial = TextBlob(tweet_body)
+        sentiment_polarity = testimonial.sentiment.polarity
+        sentiment_subjectivity = testimonial.sentiment.subjectivity
+
+        response = {'sentiment_polarity': sentiment_polarity,
+                    'sentiment_subjectivity': sentiment_subjectivity,
+                    'stripped_input': testimonial.stripped}
+        return {
+            'statusCode': 200,
+            'body': json.dumps(response)
+        }
+
     def on_message(self, message: InboundMessage):
         topic = message.get_destination_name()
         payload_str = message.get_payload_as_string()
-        print("\n" + f"Message Payload String: {payload_str} \n")
-        print("\n" + f"Message Topic: {topic} \n")
-        print("\n" + f"Message dump: {message} \n")
+        print(f"Received message on: {topic} \nMessage Payload String: {payload_str} \n")
+        payload_json = {"tweetBody": payload_str}
+        res = self.sentiment_analyzer(payload_json,"")
+        print(res)
 
 # Inner classes for error handling
 class ServiceEventHandler(ReconnectionListener, ReconnectionAttemptListener, ServiceInterruptionListener):
@@ -63,7 +87,7 @@ messaging_service.add_reconnection_attempt_listener(service_handler)
 messaging_service.add_service_interruption_listener(service_handler)
 
 # Define a Topic subscriptions 
-topics = [TOPIC_PREFIX + "/python/>", TOPIC_PREFIX + "/python/v2/>"]
+topics = [TOPIC_PREFIX + "/hashtag/>"]
 topics_sub = []
 for t in topics:
     topics_sub.append(TopicSubscription.of(t))
